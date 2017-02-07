@@ -1,5 +1,5 @@
 # album-cover-search
-This tool searches cover images of mp3 files.
+This is a GUI tool for searching cover images of mp3 files.
 
 ## Usage
 ```python ui.py```
