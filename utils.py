@@ -3,15 +3,20 @@ import sys
 import time
 from collections import defaultdict
 
-import urllib.request
-from urllib.parse import quote
+import threading
+from queue import Queue
 
+import requests
 from bs4 import BeautifulSoup
 
 from mutagen.easyid3 import EasyID3
 
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtCore import QByteArray
+
+
+N_THREADS = 4
+
 
 def get_mp3_file_paths(paths):
     file_paths = []
@@ -53,11 +58,11 @@ def get_n_albums(artist_album_dict):
 def download_cover_images(artist_name, album_name, start_index, n_query):
     t0 = time.time()
     
-    query = urllib.parse.quote_plus('{}+{}'.format(artist_name, album_name), encoding='utf-8')
-    query_url = 'http://image.search.yahoo.co.jp/search?p={}&b={}&dim=medium'.format(query, start_index)
-
-    response = urllib.request.urlopen(query_url)
-    data = response.read().decode('utf-8')
+    query = '{}+{}'.format(artist_name, album_name)
+    query_params = {'p': query, 'b': start_index, 'dim': 'medium'}
+    search_url = 'http://image.search.yahoo.co.jp/search'
+    response = requests.get(search_url, params=query_params)
+    data = response.text
 
     soup = BeautifulSoup(data, 'lxml')
     a_tags = soup.find_all('a')
@@ -70,10 +75,11 @@ def download_cover_images(artist_name, album_name, start_index, n_query):
                 image_urls.append(link_url)
     
     pixmaps = []
-    for url in image_urls:
-        pixmap = generate_pixmap(url)
-        if pixmap is not None:
-            pixmaps.append(pixmap)
+    for i in range(0, len(image_urls), n_query):        
+        tmp_pixmaps = generate_pixmap(image_urls[i:(i + n_query)])
+        for tmp in tmp_pixmaps:
+            if tmp is not None:
+                pixmaps.append(tmp)
         if len(pixmaps) >= n_query:
             print('elapsed: {}'.format(time.time() - t0))
             return pixmaps[:n_query]
@@ -82,21 +88,49 @@ def download_cover_images(artist_name, album_name, start_index, n_query):
                                          start_index + len(pixmaps),
                                          n_query - len(pixmaps))
         return pixmaps[:n_query]
+    
+    
+def generate_pixmap_parallel(data_queue, results_list):
+    while not data_queue.empty():
+        url, index = data_queue.get()
+        try:
+            response = requests.get(url, stream=True)
+        except:
+            results_list[index] = None
+            data_queue.task_done()
+            continue
+            
+        byte_data = QByteArray(response.raw.read())
+        response.close()
+    
+        _, ext = os.path.splitext(url.split('/')[-1])
+        pixmap = QPixmap()
+        try:
+            pixmap.loadFromData(byte_data, ext[1:])
+        except:
+            results_list[index] = None
+            data_queue.task_done()
+            continue
+    
+        results_list[index] = pixmap        
+        data_queue.task_done()
         
-def generate_pixmap(url):
-    try:
-        image_data = urllib.request.urlopen(url)
-    except:
-        return None
         
-    byte_data = QByteArray(image_data.read())
-    image_data.close()
-
-    _, ext = os.path.splitext(url.split('/')[-1])
-    pixmap = QPixmap()
-    try:
-        pixmap.loadFromData(byte_data, ext[1:])
-    except:
-        return None
-
-    return pixmap
+def generate_pixmap(urls):
+    results = [0 for i in range(len(urls))]
+    data_queue = Queue()
+    for i in range(len(results)):
+        data_queue.put((urls[i], i))
+    
+    workers = []    
+    for i in range(N_THREADS):
+        worker = threading.Thread(target=generate_pixmap_parallel, args=(data_queue, results))
+        worker.setDaemon(True)
+        worker.start()
+        workers.append(worker)
+     
+    data_queue.join()
+    for w in workers:
+        w.join()
+        
+    return results

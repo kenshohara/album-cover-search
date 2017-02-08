@@ -8,5 +8,7 @@ This is a GUI tool for searching cover images of mp3 files.
 * Python3
 * PyQt5
 * mutagen
-* urllib
+* requests
 * bs4
+* threading
+* queue

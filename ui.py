@@ -232,8 +232,7 @@ class cover_widget(QWidget):
 
     def _search_cover_image(self, artist_name, album_name):
         search_widget = cover_search_widget(artist_name, album_name)
-        # Tool window is alywas on top.
-        search_widget.setWindowFlags(Qt.Tool)
+        search_widget.setWindowFlags(Qt.Tool) # Tool window is alywas on top.
         search_widget.show()
 
         loop = QEventLoop()
@@ -447,7 +446,7 @@ class cover_search_widget(QWidget):
         for i, cover_layout in enumerate(self._cover_layouts):
             if (self._cover_start_index + i) == self._selected_cover_index:
                 cover_layout.itemAt(0).widget().selected()
-
+                
     @pyqtSlot()
     def _set_selected_cover_index(self, cover_layout_index):
         self._selected_cover_index = self._cover_start_index + cover_layout_index - 1
@@ -545,12 +544,9 @@ def main():
     sys.exit(app.exec_())
 
 
-if __name__ == '__main__':
-
-    
+if __name__ == '__main__':    
     main()
     
 # ToDo
-# make thread for searching cover images
 # UI (Cover hover, pressed, left and right hover, pressed, ok button if index == -1)
 # refactoring (cover widget...)
